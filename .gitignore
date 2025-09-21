@@ -1,0 +1,30 @@
+# 本機截圖（測試用，不需要上傳）
+github-automation/screenshots/*.png
+github-automation/screenshots/*.jpg
+github-automation/screenshots/*.jpeg
+
+# Python 相關
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+
+# 日誌檔案
+*.log
+logs/
+
+# IDE 設定檔
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# Playwright 相關
+playwright-report/
+test-results/
