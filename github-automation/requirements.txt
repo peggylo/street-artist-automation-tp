@@ -1,0 +1,19 @@
+# 台北街頭藝人申請系統 - Python 依賴套件
+
+# 網頁自動化
+playwright==1.48.0
+
+# HTTP 請求
+requests==2.31.0
+
+# Google API 整合
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# LINE Bot API
+line-bot-sdk==3.5.0
+
+# 日期時間處理
+python-dateutil==2.8.2

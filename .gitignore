@@ -28,3 +28,6 @@ Thumbs.db
 # Playwright 相關
 playwright-report/
 test-results/
+
+# 敏感設定檔
+github-automation/config.py
