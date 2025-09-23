@@ -115,7 +115,7 @@ class StreetArtistApplication:
             return False
     
     async def apply_time_slots(self):
-        """申請所有可用時段"""
+        """申請所有可用時段（動態搜尋方式）"""
         print("⏰ 開始申請可用時段...")
         
         try:
@@ -127,54 +127,49 @@ class StreetArtistApplication:
                 '[title="個人登記"]'
             ]
             
-            # 先確認有多少個可申請時段
-            total_slots = 0
-            for selector in personal_register_selectors:
-                try:
-                    buttons = await self.page.query_selector_all(selector)
-                    if buttons:
-                        total_slots = len(buttons)
-                        print(f"✅ 找到 {total_slots} 個可申請時段")
-                        break
-                except:
-                    continue
+            # 使用動態搜尋方式，直到沒有「個人登記」按鈕為止
+            max_attempts = 20  # 最多申請 20 個時段，避免無限迴圈
+            attempt = 0
             
-            if total_slots == 0:
-                print("⚠️  沒有找到可申請的時段")
-                return True  # 沒有可申請時段不算失敗
-            
-            # 逐一申請每個時段（每次都重新查找按鈕避免 DOM 失效）
-            for i in range(total_slots):
+            while attempt < max_attempts:
+                attempt += 1
+                
                 try:
-                    print(f"📝 申請第 {i+1} 個時段...")
+                    print(f"📝 搜尋第 {attempt} 個可申請時段...")
                     
-                    # 重新查找按鈕（避免 DOM 失效）
+                    # 重新搜尋所有「個人登記」按鈕
                     current_buttons = []
                     for selector in personal_register_selectors:
                         try:
                             buttons = await self.page.query_selector_all(selector)
-                            if buttons and len(buttons) > i:
+                            if buttons:
                                 current_buttons = buttons
                                 break
                         except:
                             continue
                     
-                    if not current_buttons or i >= len(current_buttons):
-                        print(f"⚠️  無法找到第 {i+1} 個時段的按鈕")
-                        continue
+                    # 如果沒有找到任何「個人登記」按鈕，表示全部申請完成
+                    if not current_buttons:
+                        print(f"✅ 沒有更多可申請時段，共申請了 {len(self.applied_slots)} 個時段")
+                        break
+                    
+                    print(f"🔍 找到 {len(current_buttons)} 個剩餘時段，申請第一個...")
+                    
+                    # 總是點擊第一個找到的「個人登記」按鈕
+                    target_button = current_buttons[0]
                     
                     # 使用反檢測點擊
                     if self.anti_detection:
                         # 先截圖當前狀態
-                        await self.anti_detection.take_screenshot(f"before_slot_{i+1}")
+                        await self.anti_detection.take_screenshot(f"before_slot_{attempt}")
                         
-                        # 點擊個人登記按鈕
-                        await current_buttons[i].click()
+                        # 點擊第一個個人登記按鈕
+                        await target_button.click()
                         await self.page.wait_for_load_state('networkidle')
                         await self.anti_detection.wait_with_random_delay(2000, 4000)
                         
                         # 截圖申請表單
-                        await self.anti_detection.take_screenshot(f"form_slot_{i+1}")
+                        await self.anti_detection.take_screenshot(f"form_slot_{attempt}")
                         
                         # 填寫表演項目
                         performance_selectors = [
@@ -224,7 +219,7 @@ class StreetArtistApplication:
                                     print("🎉 申請成功！")
                                     
                                     # 截圖成功彈跳視窗
-                                    await self.anti_detection.take_screenshot(f"success_slot_{i+1}")
+                                    await self.anti_detection.take_screenshot(f"success_slot_{attempt}")
                                     
                                     # 點擊確定
                                     confirm_btn = await self.page.wait_for_selector(
@@ -240,8 +235,8 @@ class StreetArtistApplication:
                                         print("⏱️  等待 5 秒讓頁面跳回日曆...")
                                         await self.anti_detection.wait_with_random_delay(5000, 6000)
                                         
-                                        self.applied_slots.append(f"時段 {i+1}")
-                                        print(f"🎉 第 {i+1} 個時段申請成功！")
+                                        self.applied_slots.append(f"時段 {attempt}")
+                                        print(f"🎉 第 {attempt} 個時段申請成功！")
                                 
                             except Exception as popup_error:
                                 print(f"⚠️  處理成功彈跳視窗時發生錯誤: {popup_error}")
@@ -249,20 +244,31 @@ class StreetArtistApplication:
                             print("❌ 無法點擊送出按鈕")
                     
                     # 每次申請完成後都確保回到日曆頁面（無論成功或失敗）
-                    if i < total_slots - 1:  # 如果不是最後一個時段
-                        print("🔄 確認回到時段選擇頁面...")
-                        current_url = self.page.url
-                        if CURRENT_VENUE_URL not in current_url:
-                            # 如果不在日曆頁面，重新導航
-                            await self.page.goto(CURRENT_VENUE_URL)
-                            await self.page.wait_for_load_state('networkidle')
-                        
-                        if self.anti_detection:
-                            await self.anti_detection.wait_with_random_delay(2000, 3000)
+                    print("🔄 確認回到時段選擇頁面...")
+                    current_url = self.page.url
+                    if CURRENT_VENUE_URL not in current_url:
+                        # 如果不在日曆頁面，重新導航
+                        await self.page.goto(CURRENT_VENUE_URL)
+                        await self.page.wait_for_load_state('networkidle')
+                    
+                    if self.anti_detection:
+                        await self.anti_detection.wait_with_random_delay(2000, 3000)
                     
                 except Exception as slot_error:
-                    print(f"❌ 申請第 {i+1} 個時段時發生錯誤: {slot_error}")
+                    print(f"❌ 申請第 {attempt} 個時段時發生錯誤: {slot_error}")
+                    # 發生錯誤時也要確保回到日曆頁面
+                    try:
+                        await self.page.goto(CURRENT_VENUE_URL)
+                        await self.page.wait_for_load_state('networkidle')
+                        if self.anti_detection:
+                            await self.anti_detection.wait_with_random_delay(2000, 3000)
+                    except:
+                        pass
                     continue
+            
+            # 檢查是否達到最大嘗試次數
+            if attempt >= max_attempts:
+                print(f"⚠️  達到最大嘗試次數 ({max_attempts})，停止申請")
             
             print(f"✅ 時段申請完成，成功申請: {len(self.applied_slots)} 個時段")
             return True
