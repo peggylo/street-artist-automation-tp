@@ -102,27 +102,9 @@ class AntiDetectionManager:
         if not self.page:
             raise Exception("瀏覽器未啟動")
         
-        # 養軌跡網站列表
-        trajectory_sites = [
-            {
-                "url": "https://www.taipei.gov.tw/",
-                "name": "台北市政府首頁",
-                "stay_time": (15, 25),
-                "actions": ["scroll"]
-            },
-            {
-                "url": "https://www.taipei.gov.tw/cp.aspx?n=6B8CE5C7B7E9C13F",
-                "name": "市民服務專區", 
-                "stay_time": (20, 30),
-                "actions": ["scroll", "hover_links"]
-            },
-            {
-                "url": "https://www.taipei.gov.tw/cp.aspx?n=BD5C76C080A3B1F8",
-                "name": "線上申辦服務",
-                "stay_time": (15, 20),
-                "actions": ["scroll"]
-            }
-        ]
+        # 從 config.py 讀取養軌跡網站列表
+        from config import TRAJECTORY_SITES
+        trajectory_sites = TRAJECTORY_SITES
         
         for i, site in enumerate(trajectory_sites):
             print(f"📍 瀏覽第 {i+1} 個網站: {site['name']}")
