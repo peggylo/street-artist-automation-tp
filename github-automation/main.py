@@ -8,7 +8,9 @@
 import asyncio
 import json
 import os
+import logging
 from pathlib import Path
+from datetime import datetime
 from anti_detection import AntiDetectionManager, LoginAntiDetection
 from config import (
     TAIPEI_ARTIST_USERNAME,
@@ -20,8 +22,37 @@ from config import (
     SCREENSHOT_DIR,
     TRAJECTORY_BUILDING_ENABLED,
     MAX_RETRIES,
-    RETRY_DELAY_SECONDS
+    RETRY_DELAY_SECONDS,
+    CURRENT_PHASE,
+    PHASE_CONFIG
 )
+
+# 設定日誌系統
+def setup_logging():
+    """設定日誌系統"""
+    phase_info = PHASE_CONFIG.get(CURRENT_PHASE, PHASE_CONFIG[1])
+    log_level = getattr(logging, phase_info["log_level"], logging.INFO)
+    
+    # 設定日誌格式
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)s | %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    
+    # 控制台處理器
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    # 設定根日誌器
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+    logger.handlers.clear()  # 清除現有處理器
+    logger.addHandler(console_handler)
+    
+    return logger
+
+# 初始化日誌
+logger = setup_logging()
 
 
 class StreetArtistApplication:
@@ -38,34 +69,43 @@ class StreetArtistApplication:
         
     async def initialize_browser(self):
         """初始化反檢測瀏覽器"""
-        print("🚀 初始化反檢測瀏覽器系統...")
+        phase_info = PHASE_CONFIG[CURRENT_PHASE]
+        logger.info("🚀 初始化反檢測瀏覽器系統...")
+        logger.info(f"📋 當前執行模式: Phase {CURRENT_PHASE} - {phase_info['name']}")
+        logger.info(f"📝 模式描述: {phase_info['description']}")
+        logger.info(f"🖥️  Headless 模式: {BROWSER_CONFIG['headless']}")
         
         if ANTI_DETECTION_ENABLED:
+            logger.debug("🔧 啟動反檢測管理器...")
             self.anti_detection = AntiDetectionManager(
                 headless=BROWSER_CONFIG["headless"],
                 screenshot_dir=SCREENSHOT_DIR
             )
             self.page = await self.anti_detection.start_browser()
+            logger.debug("✅ 反檢測瀏覽器啟動完成")
         else:
-            print("⚠️  反檢測功能已停用，使用基本瀏覽器")
+            logger.warning("⚠️  反檢測功能已停用，使用基本瀏覽器")
             # 這裡可以加入基本瀏覽器啟動邏輯
             
-        print("✅ 瀏覽器系統初始化完成")
+        logger.info("✅ 瀏覽器系統初始化完成")
     
     async def build_browsing_trajectory(self):
         """建立瀏覽軌跡"""
         if TRAJECTORY_BUILDING_ENABLED and self.anti_detection:
-            print("🎪 開始建立瀏覽軌跡以規避機器人檢測...")
+            logger.info("🎪 開始建立瀏覽軌跡以規避機器人檢測...")
+            logger.debug("📍 執行軌跡建立以提升登入成功率...")
             await self.anti_detection.perform_trajectory_building()
-            print("✅ 瀏覽軌跡建立完成")
+            logger.info("✅ 瀏覽軌跡建立完成")
         else:
-            print("⚠️  跳過軌跡建立階段")
+            logger.warning("⚠️  跳過軌跡建立階段")
     
     async def perform_login(self):
         """執行登入流程"""
-        print("🔐 開始執行登入流程...")
+        logger.info("🔐 開始執行登入流程...")
+        logger.debug(f"👤 使用帳號: {TAIPEI_ARTIST_USERNAME[:4]}****")
         
         if ANTI_DETECTION_ENABLED and self.anti_detection:
+            logger.debug("🛡️  使用增強版反檢測登入...")
             # 使用增強版登入
             login_handler = LoginAntiDetection(self.anti_detection)
             success = await login_handler.perform_enhanced_login(
@@ -74,49 +114,54 @@ class StreetArtistApplication:
             )
             
             if success:
-                print("✅ 增強版登入成功！")
+                logger.info("✅ 增強版登入成功！")
                 return True
             else:
-                print("❌ 增強版登入失敗")
+                logger.error("❌ 增強版登入失敗")
                 return False
         else:
             # 使用基本登入（原有邏輯）
-            print("⚠️  使用基本登入流程")
+            logger.warning("⚠️  使用基本登入流程")
             return await self.basic_login()
     
     async def basic_login(self):
         """基本登入流程（原有邏輯的簡化版）"""
         # 這裡保留原有的基本登入邏輯作為備用
-        print("🔐 執行基本登入流程...")
+        logger.info("🔐 執行基本登入流程...")
+        logger.debug("⚠️  基本登入功能尚未實作")
         # 實作基本登入...
         return False  # 暫時返回 False
     
     async def navigate_to_venue(self):
         """導航到指定場地時段頁面"""
-        print("🏢 前往場地時段頁面...")
+        logger.info("🏢 前往場地時段頁面...")
         
         try:
             # 使用配置檔案中的場地網址
-            print(f"📍 前往時段頁面: {CURRENT_VENUE_URL}")
+            logger.info(f"📍 前往時段頁面: {CURRENT_VENUE_URL}")
+            logger.debug("🌐 載入頁面中...")
             await self.page.goto(CURRENT_VENUE_URL, wait_until='networkidle')
             
             # 使用反檢測等待
             if self.anti_detection:
+                logger.debug("⏱️  執行反檢測延遲...")
                 await self.anti_detection.wait_with_random_delay(2000, 4000)
                 await self.anti_detection.take_screenshot("venue_page")
+                logger.debug("📸 場地頁面截圖完成")
             else:
                 await self.page.wait_for_timeout(3000)
             
-            print("✅ 成功進入時段頁面")
+            logger.info("✅ 成功進入時段頁面")
             return True
             
         except Exception as e:
-            print(f"❌ 導航到時段頁面失敗: {e}")
+            logger.error(f"❌ 導航到時段頁面失敗: {e}")
             return False
     
     async def apply_time_slots(self):
         """申請所有可用時段（動態搜尋方式）"""
-        print("⏰ 開始申請可用時段...")
+        logger.info("⏰ 開始申請可用時段...")
+        logger.debug("🔍 使用動態搜尋方式尋找可申請時段...")
         
         try:
             # 尋找「個人登記」按鈕的選擇器
@@ -135,7 +180,7 @@ class StreetArtistApplication:
                 attempt += 1
                 
                 try:
-                    print(f"📝 搜尋第 {attempt} 個可申請時段...")
+                    logger.info(f"📝 搜尋第 {attempt} 個可申請時段...")
                     
                     # 重新搜尋所有「個人登記」按鈕
                     current_buttons = []
@@ -144,16 +189,18 @@ class StreetArtistApplication:
                             buttons = await self.page.query_selector_all(selector)
                             if buttons:
                                 current_buttons = buttons
+                                logger.debug(f"✅ 使用選擇器 '{selector}' 找到 {len(buttons)} 個按鈕")
                                 break
                         except:
                             continue
                     
                     # 如果沒有找到任何「個人登記」按鈕，表示全部申請完成
                     if not current_buttons:
-                        print(f"✅ 沒有更多可申請時段，共申請了 {len(self.applied_slots)} 個時段")
+                        logger.info(f"✅ 沒有更多可申請時段，共申請了 {len(self.applied_slots)} 個時段")
                         break
                     
-                    print(f"🔍 找到 {len(current_buttons)} 個剩餘時段，申請第一個...")
+                    logger.info(f"🔍 找到 {len(current_buttons)} 個剩餘時段，申請第一個...")
+                    logger.debug("🎯 準備點擊第一個「個人登記」按鈕...")
                     
                     # 總是點擊第一個找到的「個人登記」按鈕
                     target_button = current_buttons[0]
@@ -187,9 +234,12 @@ class StreetArtistApplication:
                                 break
                         
                         if not performance_filled:
-                            print("⚠️  無法填寫表演項目")
+                            logger.warning("⚠️  無法填寫表演項目")
+                        else:
+                            logger.debug(f"✅ 表演項目填寫完成: {PERFORMANCE_ITEMS}")
                         
                         # 等待一下再送出
+                        logger.debug("⏱️  等待後準備送出申請...")
                         await self.anti_detection.wait_with_random_delay(1000, 2000)
                         
                         # 點擊確定送出
@@ -216,10 +266,11 @@ class StreetArtistApplication:
                                     timeout=10000
                                 )
                                 if success_popup:
-                                    print("🎉 申請成功！")
+                                    logger.info("🎉 申請成功！")
                                     
                                     # 截圖成功彈跳視窗
                                     await self.anti_detection.take_screenshot(f"success_slot_{attempt}")
+                                    logger.debug("📸 成功彈跳視窗截圖完成")
                                     
                                     # 點擊確定
                                     confirm_btn = await self.page.wait_for_selector(
@@ -227,27 +278,30 @@ class StreetArtistApplication:
                                         timeout=5000
                                     )
                                     if confirm_btn:
+                                        logger.debug("🔘 點擊確認按鈕...")
                                         await self.anti_detection.human_like_click(
                                             'button:has-text("確定")', "確認按鈕"
                                         )
                                         
                                         # 重要：等待 5 秒讓頁面跳回日曆頁面
-                                        print("⏱️  等待 5 秒讓頁面跳回日曆...")
+                                        logger.debug("⏱️  等待 5 秒讓頁面跳回日曆...")
                                         await self.anti_detection.wait_with_random_delay(5000, 6000)
                                         
                                         self.applied_slots.append(f"時段 {attempt}")
-                                        print(f"🎉 第 {attempt} 個時段申請成功！")
+                                        logger.info(f"🎉 第 {attempt} 個時段申請成功！")
                                 
                             except Exception as popup_error:
-                                print(f"⚠️  處理成功彈跳視窗時發生錯誤: {popup_error}")
+                                logger.warning(f"⚠️  處理成功彈跳視窗時發生錯誤: {popup_error}")
                         else:
-                            print("❌ 無法點擊送出按鈕")
+                            logger.error("❌ 無法點擊送出按鈕")
                     
                     # 每次申請完成後都確保回到日曆頁面（無論成功或失敗）
-                    print("🔄 確認回到時段選擇頁面...")
+                    logger.debug("🔄 確認回到時段選擇頁面...")
                     current_url = self.page.url
+                    logger.debug(f"🌐 當前頁面: {current_url}")
                     if CURRENT_VENUE_URL not in current_url:
                         # 如果不在日曆頁面，重新導航
+                        logger.debug("🔄 重新導航回日曆頁面...")
                         await self.page.goto(CURRENT_VENUE_URL)
                         await self.page.wait_for_load_state('networkidle')
                     
@@ -255,9 +309,10 @@ class StreetArtistApplication:
                         await self.anti_detection.wait_with_random_delay(2000, 3000)
                     
                 except Exception as slot_error:
-                    print(f"❌ 申請第 {attempt} 個時段時發生錯誤: {slot_error}")
+                    logger.error(f"❌ 申請第 {attempt} 個時段時發生錯誤: {slot_error}")
                     # 發生錯誤時也要確保回到日曆頁面
                     try:
+                        logger.debug("🔄 錯誤恢復：重新導航回日曆頁面...")
                         await self.page.goto(CURRENT_VENUE_URL)
                         await self.page.wait_for_load_state('networkidle')
                         if self.anti_detection:
@@ -268,62 +323,65 @@ class StreetArtistApplication:
             
             # 檢查是否達到最大嘗試次數
             if attempt >= max_attempts:
-                print(f"⚠️  達到最大嘗試次數 ({max_attempts})，停止申請")
+                logger.warning(f"⚠️  達到最大嘗試次數 ({max_attempts})，停止申請")
             
-            print(f"✅ 時段申請完成，成功申請: {len(self.applied_slots)} 個時段")
+            logger.info(f"✅ 時段申請完成，成功申請: {len(self.applied_slots)} 個時段")
             return True
             
         except Exception as e:
-            print(f"❌ 申請時段時發生錯誤: {e}")
+            logger.error(f"❌ 申請時段時發生錯誤: {e}")
             return False
     
     async def take_final_screenshot(self):
         """拍攝最終截圖"""
-        print("📸 拍攝最終截圖...")
+        logger.info("📸 拍攝最終截圖...")
         
         try:
             if self.anti_detection:
                 await self.anti_detection.take_screenshot("final_result", full_page=True)
+                logger.info("✅ 最終截圖已儲存 (透過反檢測管理器)")
             else:
                 screenshot_path = self.screenshot_dir / "final_result.png"
                 await self.page.screenshot(path=str(screenshot_path), full_page=True)
-                print(f"✅ 最終截圖已儲存: {screenshot_path}")
+                logger.info(f"✅ 最終截圖已儲存: {screenshot_path}")
         except Exception as e:
-            print(f"⚠️  最終截圖失敗: {e}")
+            logger.warning(f"⚠️  最終截圖失敗: {e}")
     
     async def cleanup(self):
         """清理資源"""
+        logger.debug("🧹 開始清理瀏覽器資源...")
         if self.anti_detection:
             await self.anti_detection.close_browser()
+            logger.debug("✅ 反檢測瀏覽器清理完成")
         else:
-            print("✅ 基本清理完成")
+            logger.info("✅ 基本清理完成")
     
     async def run_with_retry(self):
         """帶重試機制的主執行流程"""
         for attempt in range(1, MAX_RETRIES + 1):
-            print(f"\n🎯 開始第 {attempt} 次嘗試...")
-            print("=" * 60)
+            logger.info(f"\n🎯 開始第 {attempt} 次嘗試...")
+            logger.info("=" * 60)
             
             try:
                 success = await self.run_single_attempt()
                 if success:
-                    print(f"✅ 第 {attempt} 次嘗試成功！")
+                    logger.info(f"✅ 第 {attempt} 次嘗試成功！")
                     return True
                 else:
-                    print(f"❌ 第 {attempt} 次嘗試失敗")
+                    logger.error(f"❌ 第 {attempt} 次嘗試失敗")
                     
             except Exception as e:
-                print(f"❌ 第 {attempt} 次嘗試發生異常: {e}")
+                logger.error(f"❌ 第 {attempt} 次嘗試發生異常: {e}")
             
             # 清理當前嘗試的資源
             await self.cleanup()
             
             # 如果不是最後一次嘗試，等待後重試
             if attempt < MAX_RETRIES:
-                print(f"⏱️  等待 {RETRY_DELAY_SECONDS} 秒後重試...")
+                logger.info(f"⏱️  等待 {RETRY_DELAY_SECONDS} 秒後重試...")
                 await asyncio.sleep(RETRY_DELAY_SECONDS)
         
-        print(f"❌ 所有 {MAX_RETRIES} 次嘗試都失敗了")
+        logger.error(f"❌ 所有 {MAX_RETRIES} 次嘗試都失敗了")
         return False
     
     async def run_single_attempt(self):
@@ -338,19 +396,19 @@ class StreetArtistApplication:
             # 執行登入
             login_success = await self.perform_login()
             if not login_success:
-                print("❌ 登入失敗，終止此次嘗試")
+                logger.error("❌ 登入失敗，終止此次嘗試")
                 return False
             
             # 導航到場地頁面
             nav_success = await self.navigate_to_venue()
             if not nav_success:
-                print("❌ 導航失敗，終止此次嘗試")
+                logger.error("❌ 導航失敗，終止此次嘗試")
                 return False
             
             # 申請時段
             apply_success = await self.apply_time_slots()
             if not apply_success:
-                print("❌ 申請時段失敗")
+                logger.error("❌ 申請時段失敗")
                 return False
             
             # 拍攝最終截圖
@@ -362,41 +420,44 @@ class StreetArtistApplication:
             return True
             
         except Exception as e:
-            print(f"❌ 執行過程發生錯誤: {e}")
+            logger.error(f"❌ 執行過程發生錯誤: {e}")
             return False
     
     def show_results(self):
         """顯示申請結果摘要"""
-        print("\n" + "="*60)
-        print("🎯 申請結果摘要:")
-        print(f"✅ 成功申請時段數: {len(self.applied_slots)}")
+        logger.info("\n" + "="*60)
+        logger.info("🎯 申請結果摘要:")
+        logger.info(f"✅ 成功申請時段數: {len(self.applied_slots)}")
         if self.applied_slots:
             for slot in self.applied_slots:
-                print(f"   - {slot}")
+                logger.info(f"   - {slot}")
         else:
-            print("   - 無可申請時段或申請失敗")
-        print(f"📁 截圖位置: {self.screenshot_dir}")
-        print("="*60)
+            logger.warning("   - 無可申請時段或申請失敗")
+        logger.info(f"📁 截圖位置: {self.screenshot_dir}")
+        logger.info("="*60)
 
 
 async def main():
     """主函數"""
-    print("🎯 台北街頭藝人申請系統 (反檢測增強版)")
-    print("=" * 60)
+    phase_info = PHASE_CONFIG[CURRENT_PHASE]
+    logger.info("🎯 台北街頭藝人申請系統 (反檢測增強版)")
+    logger.info("=" * 60)
+    logger.info(f"🚀 啟動模式: Phase {CURRENT_PHASE} - {phase_info['name']}")
+    logger.info(f"📋 執行環境: Headless={BROWSER_CONFIG['headless']}")
     
     app = StreetArtistApplication()
     
     try:
         success = await app.run_with_retry()
         if success:
-            print("\n🎉 程式執行成功！")
+            logger.info("\n🎉 程式執行成功！")
         else:
-            print("\n😞 程式執行失敗，請檢查錯誤訊息")
+            logger.error("\n😞 程式執行失敗，請檢查錯誤訊息")
     
     finally:
         # 確保資源清理
         await app.cleanup()
-        print("🧹 資源清理完成")
+        logger.info("🧹 資源清理完成")
 
 
 if __name__ == "__main__":
