@@ -29,5 +29,5 @@ Thumbs.db
 playwright-report/
 test-results/
 
-# 敏感設定檔
-github-automation/config.py
+# 敏感設定檔 (已改用環境變數，config.py 可以 push)
+# github-automation/config.py  # 已移除，現在使用 Repository Secrets

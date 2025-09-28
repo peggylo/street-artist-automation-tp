@@ -15,6 +15,7 @@ import shutil
 import os
 from pathlib import Path
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+from config import BROWSER_CONFIG, HEADLESS_STEALTH_ARGS, HUMAN_BEHAVIOR_SIMULATION, TRAJECTORY_SITES
 
 
 class AntiDetectionManager:
@@ -59,17 +60,10 @@ class AntiDetectionManager:
         
         playwright = await async_playwright().start()
         
-        # 反檢測啟動參數
-        args = [
-            "--disable-blink-features=AutomationControlled",
-            "--disable-web-security",
-            "--disable-features=VizDisplayCompositor",
-            "--disable-dev-shm-usage",
+        # 使用配置檔案中的增強反檢測參數
+        args = HEADLESS_STEALTH_ARGS + [
             "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-renderer-backgrounding"
+            "--disable-setuid-sandbox"
         ]
         
         # 使用持久化上下文
@@ -78,8 +72,8 @@ class AntiDetectionManager:
             headless=self.headless,
             channel="chrome",
             args=args,
-            viewport={"width": 1366, "height": 768},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            viewport=BROWSER_CONFIG["viewport"],
+            user_agent=BROWSER_CONFIG["user_agent"]
         )
         
         # 建立新頁面
@@ -186,16 +180,18 @@ class AntiDetectionManager:
                 # 先移動到元素附近
                 box = await element.bounding_box()
                 if box:
-                    # 隨機偏移點擊位置
-                    offset_x = random.randint(-5, 5)
-                    offset_y = random.randint(-5, 5)
+                    # 隨機偏移點擊位置（使用配置參數）
+                    mouse_range = HUMAN_BEHAVIOR_SIMULATION["mouse_offset_range"]
+                    offset_x = random.randint(mouse_range[0], mouse_range[1])
+                    offset_y = random.randint(mouse_range[0], mouse_range[1])
                     
                     target_x = box['x'] + box['width']/2 + offset_x
                     target_y = box['y'] + box['height']/2 + offset_y
                     
-                    # 模擬滑鼠移動軌跡
+                    # 模擬滑鼠移動軌跡（使用配置參數）
                     await self.page.mouse.move(target_x, target_y)
-                    await self.page.wait_for_timeout(random.randint(100, 300))
+                    click_delay_range = HUMAN_BEHAVIOR_SIMULATION["click_delay_range"]
+                    await self.page.wait_for_timeout(random.randint(click_delay_range[0], click_delay_range[1]))
                     
                     # 點擊
                     await element.click()
@@ -212,18 +208,20 @@ class AntiDetectionManager:
         try:
             field = await self.page.wait_for_selector(selector, timeout=10000)
             if field:
-                # 先點擊欄位
+                # 先點擊欄位（使用配置參數）
                 await field.click()
-                await self.page.wait_for_timeout(random.randint(200, 500))
+                click_delay_range = HUMAN_BEHAVIOR_SIMULATION["click_delay_range"]
+                await self.page.wait_for_timeout(random.randint(click_delay_range[0], click_delay_range[1]))
                 
                 # 清空欄位
                 await field.fill("")
                 
-                # 逐字輸入
+                # 逐字輸入（使用配置參數）
+                typing_delay_range = HUMAN_BEHAVIOR_SIMULATION["typing_delay_range"]
                 for char in text:
                     await self.page.keyboard.type(char)
                     # 隨機打字速度
-                    await self.page.wait_for_timeout(random.randint(50, 150))
+                    await self.page.wait_for_timeout(random.randint(typing_delay_range[0], typing_delay_range[1]))
                 
                 print(f"✅ 已填入{description}: {text}")
                 return True

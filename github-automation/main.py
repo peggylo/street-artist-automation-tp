@@ -102,7 +102,10 @@ class StreetArtistApplication:
     async def perform_login(self):
         """執行登入流程"""
         logger.info("🔐 開始執行登入流程...")
-        logger.debug(f"👤 使用帳號: {TAIPEI_ARTIST_USERNAME[:4]}****")
+        if TAIPEI_ARTIST_USERNAME:
+            logger.debug(f"👤 使用帳號: {TAIPEI_ARTIST_USERNAME[:4]}****")
+        else:
+            logger.error("❌ 未設定 TAIPEI_USERNAME 環境變數")
         
         if ANTI_DETECTION_ENABLED and self.anti_detection:
             logger.debug("🛡️  使用增強版反檢測登入...")
@@ -439,11 +442,24 @@ class StreetArtistApplication:
 
 async def main():
     """主函數"""
-    phase_info = PHASE_CONFIG[CURRENT_PHASE]
+    phase_info = PHASE_CONFIG.get(CURRENT_PHASE, PHASE_CONFIG[1])
     logger.info("🎯 台北街頭藝人申請系統 (反檢測增強版)")
     logger.info("=" * 60)
     logger.info(f"🚀 啟動模式: Phase {CURRENT_PHASE} - {phase_info['name']}")
+    logger.info(f"📝 模式描述: {phase_info['description']}")
     logger.info(f"📋 執行環境: Headless={BROWSER_CONFIG['headless']}")
+    
+    # 檢查環境變數
+    if not TAIPEI_ARTIST_USERNAME or not TAIPEI_ARTIST_PASSWORD:
+        logger.error("❌ 缺少必要的環境變數 TAIPEI_USERNAME 或 TAIPEI_PASSWORD")
+        logger.error("   請檢查 Repository Secrets 設定或本機環境變數")
+        return
+    
+    # 顯示 Phase 3 特殊資訊
+    if CURRENT_PHASE == 3:
+        logger.info("🌐 GitHub Actions 執行環境")
+        logger.info("🖥️  使用 xvfb 虛擬顯示器")
+        logger.info("📸 截圖將上傳到 Artifacts")
     
     app = StreetArtistApplication()
     

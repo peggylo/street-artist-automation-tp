@@ -1,0 +1,102 @@
+name: 台北街頭藝人申請自動化
+
+on:
+  # 手動觸發
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: '執行 Phase (預設: 3)'
+        required: false
+        default: '3'
+        type: choice
+        options:
+        - '3'
+        - '2'
+  
+  # Push 觸發 (兩個分支都支援)
+  push:
+    branches: [ main, login-issue-fix ]
+    paths:
+      - 'github-automation/**'
+      - '.github/workflows/**'
+
+jobs:
+  street-artist-apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📥 Checkout 程式碼
+      uses: actions/checkout@v4
+    
+    - name: 🐍 設定 Python 環境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: 📦 安裝系統相依套件
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+        echo "✅ xvfb 安裝完成"
+    
+    - name: 📚 安裝 Python 套件
+      run: |
+        cd github-automation
+        pip install -r requirements.txt
+        echo "✅ Python 套件安裝完成"
+    
+    - name: 🎭 安裝 Playwright 瀏覽器
+      run: |
+        playwright install chromium
+        playwright install-deps chromium
+        echo "✅ Playwright Chromium 安裝完成"
+    
+    - name: 🚀 執行街頭藝人申請 (xvfb)
+      env:
+        TAIPEI_USERNAME: ${{ secrets.TAIPEI_USERNAME }}
+        TAIPEI_PASSWORD: ${{ secrets.TAIPEI_PASSWORD }}
+        PHASE: ${{ github.event.inputs.phase || '3' }}
+      run: |
+        cd github-automation
+        echo "🎯 開始執行 Phase $PHASE"
+        echo "🖥️  使用 xvfb 虛擬顯示器"
+        xvfb-run -a --server-args="-screen 0 1366x768x24" python main.py
+    
+    - name: 📸 上傳截圖到 Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: screenshots-${{ github.run_number }}
+        path: github-automation/screenshots/
+        retention-days: 90
+    
+    - name: 📋 上傳執行日誌
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-${{ github.run_number }}
+        path: |
+          github-automation/*.log
+        retention-days: 30
+        if-no-files-found: ignore
+    
+    - name: 📊 顯示執行摘要
+      if: always()
+      run: |
+        echo "## 🎯 執行摘要" >> $GITHUB_STEP_SUMMARY
+        echo "- **執行時間**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Phase**: ${{ github.event.inputs.phase || '3' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **觸發方式**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "github-automation/screenshots" ]; then
+          screenshot_count=$(ls -1 github-automation/screenshots/*.png 2>/dev/null | wc -l)
+          echo "- **截圖數量**: ${screenshot_count} 張" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **截圖數量**: 0 張" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📁 請到 Artifacts 區域下載截圖和日誌檔案" >> $GITHUB_STEP_SUMMARY

@@ -9,9 +9,14 @@ CURRENT_PHASE = int(os.getenv('PHASE', '1'))  # 預設為 Phase 1
 TAIPEI_ARTIST_WEBSITE_URL = "https://tpbusker.gov.taipei/signin.aspx"
 APPLY_PAGE_URL = "https://tpbusker.gov.taipei/apply.aspx"
 
-# 登入設定 (Phase 4 將移到 GitHub Environment Secrets)
-TAIPEI_ARTIST_USERNAME = "0918977793"
-TAIPEI_ARTIST_PASSWORD = "chuN13539"
+# 登入設定 (從 Repository Secrets 讀取)
+TAIPEI_ARTIST_USERNAME = os.getenv('TAIPEI_USERNAME')
+TAIPEI_ARTIST_PASSWORD = os.getenv('TAIPEI_PASSWORD')
+
+# 檢查必要的環境變數
+if not TAIPEI_ARTIST_USERNAME or not TAIPEI_ARTIST_PASSWORD:
+    print("⚠️  警告：未設定 TAIPEI_USERNAME 或 TAIPEI_PASSWORD 環境變數")
+    print("   本機測試請設定環境變數，GitHub Actions 請檢查 Repository Secrets")
 
 # 場地申請網址配置 (直接進入各場地的日曆頁面)
 VENUE_URLS = {
@@ -70,20 +75,36 @@ TRAJECTORY_SITES = [
     }
 ]
 
-# 人類行為模擬設定
+# 人類行為模擬設定 (根據 Phase 調整)
 HUMAN_BEHAVIOR_SIMULATION = {
-    "typing_delay_range": (50, 150),  # 打字間隔毫秒
-    "click_delay_range": (100, 300),  # 點擊前等待毫秒
-    "operation_delay_range": (1000, 3000),  # 操作間隔毫秒
-    "mouse_offset_range": (-5, 5)  # 滑鼠點擊偏移像素
+    "typing_delay_range": (80, 200) if CURRENT_PHASE >= 2 else (50, 150),  # Phase 2+ 增加打字間隔
+    "click_delay_range": (150, 400) if CURRENT_PHASE >= 2 else (100, 300),  # Phase 2+ 增加點擊延遲
+    "operation_delay_range": (1500, 4000) if CURRENT_PHASE >= 2 else (1000, 3000),  # Phase 2+ 增加操作間隔
+    "mouse_offset_range": (-8, 8) if CURRENT_PHASE >= 2 else (-5, 5)  # Phase 2+ 增加滑鼠隨機性
 }
 
 # 瀏覽器設定 (根據 Phase 自動調整)
 BROWSER_CONFIG = {
     "headless": CURRENT_PHASE >= 2,  # Phase 1: False (有畫面), Phase 2+: True (無畫面)
     "viewport": {"width": 1366, "height": 768},
-    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" if CURRENT_PHASE >= 2 else "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
+
+# 增強 headless 反檢測參數
+HEADLESS_STEALTH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage", 
+    "--disable-web-security",
+    "--disable-features=VizDisplayCompositor",
+    "--no-first-run",
+    "--disable-extensions-file-access-check",
+    "--disable-default-apps",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-field-trial-config"
+]
 
 # Phase 相關設定
 PHASE_CONFIG = {
@@ -95,6 +116,11 @@ PHASE_CONFIG = {
     2: {
         "name": "無畫面測試", 
         "description": "模擬 GitHub Actions 環境",
+        "log_level": "DEBUG"
+    },
+    3: {
+        "name": "GitHub Actions + xvfb",
+        "description": "雲端執行 + 虛擬顯示器",
         "log_level": "DEBUG"
     }
 }
