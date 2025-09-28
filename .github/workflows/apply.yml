@@ -15,7 +15,7 @@ on:
   
   # Push 觸發 (兩個分支都支援)
   push:
-    branches: [ main, login-issue-fix ]
+    branches: [ main, feature/login-issue-fix ]
     paths:
       - 'github-automation/**'
       - '.github/workflows/**'
