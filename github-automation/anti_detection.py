@@ -66,6 +66,10 @@ class AntiDetectionManager:
             "--disable-setuid-sandbox"
         ]
         
+        # 如果是 headless 模式，加入新的 headless 參數
+        if self.headless:
+            args.append("--headless=new")
+        
         # 使用持久化上下文
         self.context = await playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.profile_dir),
