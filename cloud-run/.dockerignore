@@ -1,0 +1,50 @@
+# Docker build 忽略檔案
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 環境變數檔案
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+.github/
+
+# 截圖資料夾（不需要打包進 image）
+github-automation/screenshots/
+screenshots/
+
+# 文檔
+docs/
+*.md
+README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# 測試檔案
+test_*.py
+*_test.py
+
+# GAS webhook
+gas-webhook/
+
+# Cloud Run 配置（但保留 entrypoint.sh）
+cloud-run/Dockerfile
+cloud-run/.dockerignore
+cloud-run/cloudbuild.yaml
+cloud-run/deploy.sh
+!cloud-run/entrypoint.sh
+

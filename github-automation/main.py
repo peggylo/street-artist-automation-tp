@@ -5,27 +5,83 @@
 整合反檢測技術的街頭藝人申請自動化系統
 """
 
+# 立即輸出啟動訊息（在任何 import 之前）
+import sys
+import os
+
+print("=" * 60, flush=True)
+print("🚀 Python 程式啟動中...", flush=True)
+print("=" * 60, flush=True)
+print(f"📍 Python 版本: {sys.version}", flush=True)
+print(f"📍 當前目錄: {os.getcwd()}", flush=True)
+print(f"📍 PHASE 環境變數: {os.getenv('PHASE', '未設定')}", flush=True)
+sys.stdout.flush()
+sys.stderr.flush()
+
 import asyncio
 import json
-import os
 import logging
 from pathlib import Path
 from datetime import datetime
-from anti_detection import AntiDetectionManager, LoginAntiDetection
-from config import (
-    TAIPEI_ARTIST_USERNAME,
-    TAIPEI_ARTIST_PASSWORD,
-    CURRENT_VENUE_URL,
-    PERFORMANCE_ITEMS,
-    ANTI_DETECTION_ENABLED,
-    BROWSER_CONFIG,
-    SCREENSHOT_DIR,
-    TRAJECTORY_BUILDING_ENABLED,
-    MAX_RETRIES,
-    RETRY_DELAY_SECONDS,
-    CURRENT_PHASE,
-    PHASE_CONFIG
-)
+
+print("✅ 基本模組載入完成", flush=True)
+sys.stdout.flush()
+sys.stderr.flush()
+
+try:
+    print("📦 載入 anti_detection 模組...", flush=True)
+    from anti_detection import AntiDetectionManager, LoginAntiDetection
+    print("✅ anti_detection 模組載入完成", flush=True)
+    sys.stdout.flush()
+    sys.stderr.flush()
+except Exception as e:
+    print(f"❌ anti_detection 模組載入失敗: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(1)
+try:
+    print("📦 載入 config 模組...", flush=True)
+    from config import (
+        TAIPEI_ARTIST_USERNAME,
+        TAIPEI_ARTIST_PASSWORD,
+        CURRENT_VENUE_URL,
+        PERFORMANCE_ITEMS,
+        ANTI_DETECTION_ENABLED,
+        BROWSER_CONFIG,
+        SCREENSHOT_DIR,
+        TRAJECTORY_BUILDING_ENABLED,
+        MAX_RETRIES,
+        RETRY_DELAY_SECONDS,
+        CURRENT_PHASE,
+        PHASE_CONFIG,
+        GCS_CONFIG
+    )
+    print(f"✅ config 模組載入完成 (PHASE={CURRENT_PHASE})", flush=True)
+    sys.stdout.flush()
+    sys.stderr.flush()
+except Exception as e:
+    print(f"❌ config 模組載入失敗: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(1)
+
+try:
+    print("📦 載入 storage_handler 模組...", flush=True)
+    from storage_handler import handle_screenshots
+    print("✅ storage_handler 模組載入完成", flush=True)
+    sys.stdout.flush()
+    sys.stderr.flush()
+except Exception as e:
+    print(f"❌ storage_handler 模組載入失敗: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(1)
 
 # 設定日誌系統
 def setup_logging():
@@ -461,6 +517,13 @@ async def main():
         logger.info("🖥️  使用 xvfb 虛擬顯示器")
         logger.info("📸 截圖將上傳到 Artifacts")
     
+    # 顯示 Phase 4 特殊資訊
+    if CURRENT_PHASE == 4:
+        logger.info("☁️  Cloud Run 執行環境")
+        logger.info("🖥️  使用 xvfb 虛擬顯示器")
+        logger.info("📸 截圖將上傳到 Google Cloud Storage")
+        logger.info(f"🗂️  GCS Bucket: {GCS_CONFIG['bucket_name']}")
+    
     app = StreetArtistApplication()
     
     try:
@@ -469,6 +532,31 @@ async def main():
             logger.info("\n🎉 程式執行成功！")
         else:
             logger.error("\n😞 程式執行失敗，請檢查錯誤訊息")
+        
+        # Phase 4: 處理截圖上傳
+        if CURRENT_PHASE == 4:
+            logger.info("\n" + "="*60)
+            logger.info("📤 處理截圖上傳...")
+            
+            try:
+                result = handle_screenshots(phase=CURRENT_PHASE, gcs_config=GCS_CONFIG)
+                
+                if result["success"]:
+                    logger.info(f"✅ 截圖處理成功！")
+                    logger.info(f"   數量: {result['screenshot_count']} 張")
+                    logger.info(f"   位置: {result['storage_location']}")
+                    
+                    if result.get("gcs_urls"):
+                        logger.info(f"   GCS URLs:")
+                        for url in result["gcs_urls"]:
+                            logger.info(f"      - {url}")
+                else:
+                    logger.error("❌ 截圖處理失敗")
+            
+            except Exception as e:
+                logger.error(f"❌ 處理截圖時發生錯誤: {e}")
+            
+            logger.info("="*60)
     
     finally:
         # 確保資源清理

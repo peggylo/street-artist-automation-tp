@@ -1,0 +1,23 @@
+steps:
+  # 步驟 1: 建置 Docker Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_IMAGE_URL}:latest'
+      - '-f'
+      - 'cloud-run/Dockerfile'
+      - '.'
+
+  # 步驟 2: 推送 Image 到 Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_IMAGE_URL}:latest'
+
+images:
+  - '${_IMAGE_URL}:latest'
+
+substitutions:
+  _IMAGE_URL: 'asia-east1-docker.pkg.dev/street-artist-automation-tp/street-artist-images/street-artist-app'
+

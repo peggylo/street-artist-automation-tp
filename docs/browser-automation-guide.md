@@ -109,13 +109,15 @@
 
 ### 本機開發階段
 
-#### Phase 1：有畫面除錯
+#### Phase 1：有畫面除錯 ✅ 成功
 - **瀏覽器模式**：headless=False
 - **目的**：觀察每個步驟，確認流程正確
 - **Profile**：臨時資料夾
 - **養軌跡**：完整執行
+- **狀態**：✅ **成功通過 reCAPTCHA 驗證**
+- **原因**：真實瀏覽器環境，完整的用戶行為特徵
 
-#### Phase 2：無畫面測試  
+#### Phase 2：無畫面測試 ❌ 失敗
 - **瀏覽器模式**：headless=True（透過 config.py 控制）
 - **目的**：模擬 GitHub Actions 環境，為 xvfb 做準備
 - **反檢測增強**：
@@ -124,39 +126,29 @@
   - 適度調整人類行為模擬參數
 - **養軌跡**：維持 2-3 分鐘（TRAJECTORY_BUILDING_ENABLED=True）
 - **截圖機制**：維持現有密度，每個步驟自動截圖
-- **日誌增強**：詳細但適量的 log 輸出
-- **驗證方式**：透過截圖確認任務完成狀況
-- **策略**：即使失敗也繼續 Phase 3，期待 xvfb 解決問題
+- **狀態**：❌ **被 reCAPTCHA 識別為機器人**
+- **原因**：Headless 模式缺少真實瀏覽器特徵，即使有反檢測措施仍被識別
 
-#### Phase 3：GitHub Actions 部署
+#### Phase 3：GitHub Actions 部署 ❌ 失敗
 
 **核心策略：GitHub Actions + xvfb 虛擬顯示器**
 
 ##### 環境特性
 - **執行環境**：Ubuntu Linux
-- **顯示方式**：xvfb 虛擬螢幕（關鍵改進）
+- **顯示方式**：xvfb 虛擬螢幕
 - **Profile 位置**：/tmp/ 臨時目錄
 - **網路環境**：GitHub Actions IP 範圍
-- **User-Agent**：Linux 版本（與 Phase 2 一致）
-
-##### 觸發方式
-- **手動觸發**：GitHub 網頁 Actions 頁面點擊按鈕
-- **Push 觸發**：push 到 main 或 login-issue-fix 分支自動執行
-- **未來整合**：透過 GAS 接收 LINE webhook 後呼叫 GitHub API
+- **User-Agent**：Linux 版本
 
 ##### 敏感資訊管理
 - **Repository Secrets**：
   - `TAIPEI_USERNAME`: 台北通帳號
   - `TAIPEI_PASSWORD`: 台北通密碼
 - **config.py**：改用 `os.getenv()` 讀取環境變數
-- **安全性**：敏感資訊不會出現在程式碼中
 
 ##### 截圖策略
 - **執行期間**：截圖存儲在虛擬機本機
 - **執行完畢**：自動上傳到 GitHub Artifacts
-- **查看方式**：Actions 頁面下載 zip 檔案
-- **保存期限**：90 天
-- **未來整合**：Google Drive 上傳 + LINE 回傳
 
 ##### xvfb 設定
 ```yaml
@@ -173,18 +165,104 @@
     xvfb-run -a python main.py
 ```
 
-##### 開發流程
-- **分支開發**：在 login-issue-fix 分支測試
-- **兩分支觸發**：main 和 login-issue-fix 都可執行
-- **測試完成後**：合併回 main 分支
+**狀態**：❌ **被 reCAPTCHA 識別為機器人**
+**原因**：即使使用 xvfb，仍在 headless 環境執行，缺少真實瀏覽器特徵
 
-##### 最佳化設定
-- **預先安裝**：瀏覽器、xvfb 與相依套件
-- **執行時間**：控制在 15 分鐘內完成
-- **除錯機制**：完整截圖記錄、詳細日誌、Artifacts 上傳
-- **重試機制**：維持 3 次重試，間隔 30 秒
+#### Phase 4：Cloud Run Jobs 部署 ❌ 失敗
+
+**核心策略：GCP Cloud Run Jobs + xvfb + GCS 截圖上傳**
+
+##### 環境特性
+- **執行環境**：Docker Container (Debian Linux)
+- **顯示方式**：Xvfb 虛擬顯示器
+- **Profile 位置**：/tmp/ 臨時目錄
+- **截圖上傳**：即時上傳到 Google Cloud Storage
+- **日誌系統**：Cloud Logging（已完全解決日誌輸出問題）
+
+##### 敏感資訊管理
+- **Secret Manager**：
+  - `TAIPEI_USERNAME`: 台北通帳號
+  - `TAIPEI_PASSWORD`: 台北通密碼
+- **Service Account**: 具有 Secret Manager 和 Storage Admin 權限
+
+##### 部署與執行
+```bash
+# 部署
+./cloud-run/deploy.sh
+
+# 執行
+gcloud run jobs execute street-artist-job --region asia-east1
+
+# 查看日誌
+gcloud logging read "resource.type=cloud_run_job ..."
+```
+
+##### 日誌輸出改進（已解決）
+- ✅ 使用 `entrypoint.sh` 診斷腳本
+- ✅ Xvfb 在背景啟動，不透過 xvfb-run
+- ✅ 完整的環境診斷和模組載入追蹤
+- ✅ 所有 stdout/stderr 正確輸出到 Cloud Logging
+- 📚 詳細說明：參考 `development-guide.md` 的「已解決問題」章節
+
+**狀態**：❌ **被 reCAPTCHA 識別為機器人**
+**原因**：
+1. Headless 環境執行，缺少真實瀏覽器特徵
+2. 無法使用 `channel="chrome"`（改用 Playwright Chromium）
+3. reCAPTCHA v3 偵測到自動化行為模式
 
 
+
+---
+
+## 📊 各 Phase 測試結果總結（2025-10-06）
+
+| Phase | 環境 | Headless | 狀態 | 備註 |
+|-------|------|----------|------|------|
+| Phase 1 | 本地 macOS | ❌ False | ✅ 成功 | 真實瀏覽器環境，完整用戶特徵 |
+| Phase 2 | 本地 macOS | ✅ True | ❌ 失敗 | Headless 缺少瀏覽器特徵 |
+| Phase 3 | GitHub Actions | ✅ True + xvfb | ❌ 失敗 | 虛擬顯示器仍被識別 |
+| Phase 4 | Cloud Run | ✅ True + Xvfb | ❌ 失敗 | Container 環境被識別 |
+
+### 關鍵發現
+
+**✅ 成功要素（Phase 1）：**
+- 真實的桌面瀏覽器環境
+- 完整的瀏覽器指紋特徵
+- 真實的用戶交互模式
+
+**❌ 失敗要素（Phase 2-4）：**
+- Headless 模式本質缺陷
+- 缺少真實瀏覽器的 WebGL、Canvas 等特徵
+- reCAPTCHA v3 的行為分析偵測
+- 虛擬顯示器無法提供真實環境特徵
+
+### 技術債務與限制
+
+**已解決問題：**
+- ✅ Cloud Run Jobs 日誌輸出（完全解決）
+- ✅ 截圖上傳到 GCS（正常運作）
+- ✅ 環境變數管理（Secret Manager）
+- ✅ Xvfb 虛擬顯示器設定
+
+**未解決問題：**
+- ❌ reCAPTCHA v3 反機器人檢測（Phase 2-4 全部失敗）
+- ❌ Headless 模式被識別
+- ❌ 無法在雲端環境執行自動化
+
+### 結論
+
+**目前狀態：** 只有 Phase 1（本地有頭模式）能成功通過 reCAPTCHA 驗證
+
+**技術限制：**
+1. reCAPTCHA v3 使用機器學習分析用戶行為
+2. Headless 瀏覽器天生缺少真實瀏覽器特徵
+3. 即使使用反檢測技術和養軌跡策略，仍無法完全模擬真實用戶
+
+**可能的解決方案：**
+1. **使用真實瀏覽器**：部署到有桌面環境的 VPS（成本較高）
+2. **第三方服務**：使用 2Captcha、Anti-Captcha 等服務（需付費）
+3. **改變策略**：尋找其他突破點或手動半自動化流程
+4. **等待網站改版**：期待未來移除 reCAPTCHA 或改用其他驗證方式
 
 ---
 
@@ -202,4 +280,4 @@
 
 ---
 
-**版本**: v1.3 | **更新**: 2025-09-25 | **適用於**: Phase 3 GitHub Actions 實作
+**版本**: v1.4 | **更新**: 2025-10-06 | **適用於**: 各 Phase 測試總結與技術限制說明

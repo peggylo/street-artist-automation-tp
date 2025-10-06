@@ -106,6 +106,13 @@ HEADLESS_STEALTH_ARGS = [
     "--disable-field-trial-config"
 ]
 
+# Google Cloud Storage 設定（Phase 4 使用）
+GCS_CONFIG = {
+    "bucket_name": "street-artist-screenshots",
+    "project_id": "street-artist-automation-tp",
+    "location": "asia-east1",
+}
+
 # Phase 相關設定
 PHASE_CONFIG = {
     1: {
@@ -121,6 +128,11 @@ PHASE_CONFIG = {
     3: {
         "name": "GitHub Actions + xvfb",
         "description": "雲端執行 + 虛擬顯示器",
+        "log_level": "DEBUG"
+    },
+    4: {
+        "name": "Cloud Run + GCS",
+        "description": "雲端執行 + 截圖上傳 GCS",
         "log_level": "DEBUG"
     }
 }

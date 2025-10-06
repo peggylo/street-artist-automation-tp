@@ -8,14 +8,35 @@
 - 人類行為模擬
 """
 
+import sys
+print("📦 anti_detection 模組：載入基本模組...", flush=True)
+
 import asyncio
 import random
 import tempfile
 import shutil
 import os
+import logging
 from pathlib import Path
-from playwright.async_api import async_playwright, Browser, BrowserContext, Page
-from config import BROWSER_CONFIG, HEADLESS_STEALTH_ARGS, HUMAN_BEHAVIOR_SIMULATION, TRAJECTORY_SITES
+from datetime import datetime
+
+print("📦 anti_detection 模組：載入 playwright...", flush=True)
+sys.stdout.flush()
+try:
+    from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+    print("✅ playwright 模組載入成功", flush=True)
+except Exception as e:
+    print(f"❌ playwright 模組載入失敗: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+print("📦 anti_detection 模組：載入 config...", flush=True)
+from config import BROWSER_CONFIG, HEADLESS_STEALTH_ARGS, HUMAN_BEHAVIOR_SIMULATION, TRAJECTORY_SITES, CURRENT_PHASE, GCS_CONFIG
+
+logger = logging.getLogger(__name__)
+print("✅ anti_detection 模組初始化完成", flush=True)
+sys.stdout.flush()
 
 
 class AntiDetectionManager:
@@ -28,6 +49,13 @@ class AntiDetectionManager:
         self.browser = None
         self.context = None
         self.page = None
+        
+        # Phase 4: 初始化 GCS 客戶端用於即時上傳
+        self.gcs_client = None
+        self.gcs_bucket = None
+        self.gcs_timestamp = None
+        if CURRENT_PHASE == 4:
+            self._init_gcs_for_realtime_upload()
         
         # 確保截圖目錄存在
         self.screenshot_dir.mkdir(exist_ok=True)
@@ -74,7 +102,7 @@ class AntiDetectionManager:
         self.context = await playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.profile_dir),
             headless=self.headless,
-            channel="chrome",
+            # Phase 4: 使用 Playwright 安裝的 Chromium，不指定 channel
             args=args,
             viewport=BROWSER_CONFIG["viewport"],
             user_agent=BROWSER_CONFIG["user_agent"]
@@ -115,9 +143,14 @@ class AntiDetectionManager:
                 await self.page.wait_for_timeout(random.randint(2000, 4000))
                 
                 # 截圖記錄
-                screenshot_path = self.screenshot_dir / f"trajectory_{i+1}_{site['name'].replace(' ', '_')}.png"
+                screenshot_name = f"trajectory_{i+1}_{site['name'].replace(' ', '_')}.png"
+                screenshot_path = self.screenshot_dir / screenshot_name
                 await self.page.screenshot(path=str(screenshot_path))
                 print(f"📸 已截圖: {screenshot_path}")
+                
+                # Phase 4: 立即上傳到 GCS
+                if CURRENT_PHASE == 4:
+                    self._upload_to_gcs_sync(str(screenshot_path), screenshot_name)
                 
                 # 執行隨機動作
                 if "scroll" in site['actions']:
@@ -235,12 +268,71 @@ class AntiDetectionManager:
         
         return False
     
+    def _init_gcs_for_realtime_upload(self):
+        """初始化 GCS 客戶端（僅 Phase 4）"""
+        print("🔧 開始初始化 GCS 客戶端...")
+        import sys
+        sys.stdout.flush()
+        
+        try:
+            from google.cloud import storage
+            print("✅ google.cloud.storage 模組載入成功")
+            sys.stdout.flush()
+            
+            self.gcs_client = storage.Client(project=GCS_CONFIG["project_id"])
+            print(f"✅ GCS Client 建立成功 (project: {GCS_CONFIG['project_id']})")
+            sys.stdout.flush()
+            
+            self.gcs_bucket = self.gcs_client.bucket(GCS_CONFIG["bucket_name"])
+            self.gcs_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            
+            print(f"✅ GCS 即時上傳已啟用")
+            print(f"   Bucket: {GCS_CONFIG['bucket_name']}")
+            print(f"   時間戳記: {self.gcs_timestamp}")
+            sys.stdout.flush()
+            
+            logger.info(f"✅ GCS 即時上傳已啟用")
+            logger.info(f"   Bucket: {GCS_CONFIG['bucket_name']}")
+            logger.info(f"   時間戳記: {self.gcs_timestamp}")
+            
+        except Exception as e:
+            print(f"❌ GCS 初始化失敗: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.stdout.flush()
+            
+            logger.error(f"❌ GCS 初始化失敗: {e}")
+            logger.warning("⚠️  將只儲存到本地，不上傳 GCS")
+    
+    def _upload_to_gcs_sync(self, local_path, filename):
+        """同步上傳檔案到 GCS（僅 Phase 4）"""
+        if not self.gcs_bucket or not self.gcs_timestamp:
+            return None
+        
+        try:
+            blob_name = f"screenshots/{self.gcs_timestamp}/{filename}"
+            blob = self.gcs_bucket.blob(blob_name)
+            blob.upload_from_filename(local_path)
+            
+            gcs_url = f"gs://{GCS_CONFIG['bucket_name']}/{blob_name}"
+            logger.info(f"☁️  已上傳到 GCS: {filename}")
+            return gcs_url
+            
+        except Exception as e:
+            logger.error(f"❌ GCS 上傳失敗 ({filename}): {e}")
+            return None
+    
     async def take_screenshot(self, name, full_page=False):
         """拍攝截圖"""
         try:
             screenshot_path = self.screenshot_dir / f"{name}.png"
             await self.page.screenshot(path=str(screenshot_path), full_page=full_page)
             print(f"📸 已截圖: {screenshot_path}")
+            
+            # Phase 4: 立即上傳到 GCS
+            if CURRENT_PHASE == 4:
+                self._upload_to_gcs_sync(str(screenshot_path), f"{name}.png")
+            
             return str(screenshot_path)
         except Exception as e:
             print(f"⚠️  截圖失敗: {e}")
